@@ -48,6 +48,11 @@ const BaseUnit = enum {
 
     auto,
 
+    /// count returns the number of variants in BaseUnit.
+    pub fn count() usize {
+        return @enumToInt(BaseUnit.auto) + 1;
+    }
+
     /// metric returns the metric that a BaseUnit measures. E.g. bytes measures data size.
     pub fn metric(self: BaseUnit) Metric {
         return switch (self) {
@@ -145,7 +150,7 @@ const Unit = union(enum) {
 
 /// baseUnitNames contains a row for every BaseUnit (in order of the tag's declariation) and the row contains synonyms
 /// for the unit.
-const baseUnitNames = [_][]const []const u8{
+const baseUnitNames = [BaseUnit.count()][]const []const u8{
     &[_][]const u8{ "bits", "bit", "bi", "b", "" },
     &[_][]const u8{ "bytes", "byte", "B", "" },
     &[_][]const u8{ "KB", "kilobytes", "kb", "" },
