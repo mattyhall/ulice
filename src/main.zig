@@ -103,10 +103,13 @@ const Unit = union(enum) {
     composite: struct { num: BaseUnit, den: BaseUnit },
 
     /// metric returns the metric that the Unit measures.
-    pub fn metric(self: Unit) Metric {
+    pub fn metric(self: Unit) ?Metric {
         return switch (self) {
             .basic => |b| b.metric(),
-            else => unreachable,
+            .composite => |c| {
+                if (c.num.metric() == .data_size and c.den.metric() == .time) return .bandwidth;
+                return null;
+            },
         };
     }
 
@@ -122,7 +125,7 @@ const Unit = union(enum) {
     pub fn toSI(self: Unit, n: f64) f64 {
         return switch (self) {
             .basic => |b| b.toSI(n),
-            else => unreachable,
+            .composite => |c| c.num.toSI(n) / c.den.toSI(1),
         };
     }
 
@@ -130,7 +133,7 @@ const Unit = union(enum) {
     pub fn fromSI(self: Unit, n: f64) f64 {
         return switch (self) {
             .basic => |b| b.fromSI(n),
-            else => unreachable,
+            .composite => |c| c.num.fromSI(n) / c.den.toSI(1),
         };
     }
 };
@@ -311,6 +314,48 @@ test "convert basic" {
 
     try testing.expectApproxEqAbs(@as(f64, 147), try convertBasic(147 * 24 * 60 * 60, .seconds, .days), epsilon);
     try testing.expectApproxEqAbs(@as(f64, 2.45), try convertBasic(147 * 1e9, .nanoseconds, .minutes), epsilon);
+}
+
+test "convert composite" {
+    try testing.expectApproxEqAbs(
+        @as(f64, 147),
+        try convert(
+            147 * 1024,
+            .{ .composite = .{ .num = .bytes, .den = .seconds } },
+            .{ .composite = .{ .num = .kibibytes, .den = .seconds } },
+        ),
+        epsilon,
+    );
+
+    try testing.expectApproxEqAbs(
+        @as(f64, 147 * 1024),
+        try convert(
+            147,
+            .{ .composite = .{ .num = .kibibytes, .den = .seconds } },
+            .{ .composite = .{ .num = .bytes, .den = .seconds } },
+        ),
+        epsilon,
+    );
+
+    try testing.expectApproxEqAbs(
+        @as(f64, 147),
+        try convert(
+            147 * 1024 * 60,
+            .{ .composite = .{ .num = .bytes, .den = .seconds } },
+            .{ .composite = .{ .num = .kibibytes, .den = .minutes } },
+        ),
+        epsilon,
+    );
+
+    try testing.expectApproxEqAbs(
+        @as(f64, (147.0 * 1024.0)/60.0),
+        try convert(
+            147,
+            .{ .composite = .{ .num = .kibibytes, .den = .minutes } },
+            .{ .composite = .{ .num = .bytes, .den = .seconds } },
+        ),
+        epsilon,
+    );
 }
 
 test "convert mismatched metrics" {
