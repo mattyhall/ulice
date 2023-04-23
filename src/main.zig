@@ -58,7 +58,7 @@ const BaseUnit = enum {
     /// metric.
     pub fn toSIMult(self: BaseUnit) f64 {
         return switch (self) {
-            .bits => 8,
+            .bits => 1.0 / 8.0,
             .bytes => 1,
             .kilobytes => 1e3,
             .kibibytes => 1024,
