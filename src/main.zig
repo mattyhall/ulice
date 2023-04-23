@@ -208,7 +208,7 @@ fn run(args: [][:0]const u8) !void {
 
     const res_num = try convert(src_num, src_unit, target_unit);
 
-    if (std.math.approxEqAbs(f64, res_num, std.math.round(src_num), epsilon)) {
+    if (std.math.approxEqAbs(f64, res_num, std.math.round(res_num), epsilon)) {
         std.debug.print("{} {s}\n", .{ @floatToInt(u64, res_num), target_unit.toString() });
         return;
     }
