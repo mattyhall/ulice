@@ -1,19 +1,26 @@
 const std = @import("std");
 
+/// epsilon is the maximum difference between floats before we consider them different values, i.e. if
+/// abs(x - y) <= epsilon then we consider them the same value.
+const epsilon = 0.005;
+
+/// Metric is something that can be measured, e.g. time, file size etc.
 const Metric = enum {
     data_size,
     time,
     bandwidth,
 
+    /// si is the SI Unit for this metric. E.g. for time it is seconds, data size is bytes.
     fn si(self: Metric) Unit {
         switch (self) {
-            .data_size => .bit,
-            .time => .nanoseconds,
+            .data_size => .bytes,
+            .time => .seconds,
             .bandiwdth => .{ .composite = .{ .quot = .bits, .div = .seconds } },
         }
     }
 };
 
+/// BaseUnit is an enum of units.
 const BaseUnit = enum {
     bits,
     bytes,
@@ -36,6 +43,7 @@ const BaseUnit = enum {
     weeks,
     years,
 
+    /// metric returns the metric that a BaseUnit measures. E.g. bytes measures data size.
     pub fn metric(self: BaseUnit) Metric {
         switch (self) {
             .bits, .bytes, .kilobytes, .kibibytes, .megabytes, .mebibytes, .giagabytes, .gibibytes, .terabytes, .tebibytes => .data_size,
@@ -43,15 +51,18 @@ const BaseUnit = enum {
         }
     }
 
+    /// toString returns a canonical string for the given base unit, suitable for user feedback.
     pub fn toString(self: BaseUnit) []const u8 {
         return baseUnitNames[@enumToInt(self)][0];
     }
 };
 
+/// Unit is a unit of an amount. It can either by a simple unit (basic) or a composite one (e.g Mb/s).
 const Unit = union(enum) {
     basic: BaseUnit,
     composite: struct { quot: BaseUnit, div: BaseUnit },
 
+    /// metric returns the metric that the Unit measures.
     pub fn metric(self: Unit) Metric {
         switch (self) {
             .basic => |b| b.metric(),
@@ -60,17 +71,19 @@ const Unit = union(enum) {
     }
 };
 
+/// baseUnitNames contains a row for every BaseUnit (in order of the tag's declariation) and the row contains synonyms
+/// for the unit.
 const baseUnitNames = [_][]const []const u8{
-    &[_][]const u8{ "bits", "bit","bi", "b", "" },
-    &[_][]const u8{ "bytes", "byte","B", "" },
+    &[_][]const u8{ "bits", "bit", "bi", "b", "" },
+    &[_][]const u8{ "bytes", "byte", "B", "" },
     &[_][]const u8{ "KB", "kilobytes", "kb", "" },
     &[_][]const u8{ "KiB", "kibibytes", "kib", "" },
     &[_][]const u8{ "MB", "megabytes", "mb", "" },
-    &[_][]const u8{ "MiB", "mebibytes", "mib","" },
+    &[_][]const u8{ "MiB", "mebibytes", "mib", "" },
     &[_][]const u8{ "GB", "gigabytes", "gb", "" },
     &[_][]const u8{ "GiB", "gibibytes", "gib", "" },
     &[_][]const u8{ "TB", "terabytes", "tb", "" },
-    &[_][]const u8{ "TiB", "tibibytes", "tib","" },
+    &[_][]const u8{ "TiB", "tibibytes", "tib", "" },
 
     &[_][]const u8{ "ns", "nanoseconds", "nanosecond", "" },
     &[_][]const u8{ "us", "microseconds", "microsecond", "" },
@@ -82,6 +95,7 @@ const baseUnitNames = [_][]const []const u8{
     &[_][]const u8{ "yr", "years", "year", "yrs", "y", "" },
 };
 
+/// splitAmountAndUnit takes a string like "7bits" and splits it into two substrings - the amount and the unit.
 fn splitAmountAndUnit(s: []const u8) !struct { amount: []const u8, unit: []const u8 } {
     if (s.len <= 1) return error.AmountAndUnitRequired;
 
@@ -92,6 +106,9 @@ fn splitAmountAndUnit(s: []const u8) !struct { amount: []const u8, unit: []const
     return error.AmountAndUnitRequired;
 }
 
+/// parseUnit takes a string and turns it into a BaseUnit.
+///
+/// NOTE: This is done by matching the string against the values in baseUnitNames.
 fn parseUnit(s: []const u8) !BaseUnit {
     for (baseUnitNames, 0..) |names, i| {
         for (names) |name| {
@@ -102,6 +119,7 @@ fn parseUnit(s: []const u8) !BaseUnit {
     return error.UnitNotFound;
 }
 
+/// run is the real main of the program - it takes the command line arguments and tries to convert them.
 fn run(args: [][:0]const u8) !void {
     if (args.len != 3) return error.NotEnoughArgs;
 
@@ -110,7 +128,12 @@ fn run(args: [][:0]const u8) !void {
     const src_num = std.fmt.parseFloat(f64, src.amount) catch return error.CouldNotParseAmount;
     const unit = try parseUnit(src.unit);
 
-    std.debug.print("{:.2} {s}\n", .{src_num, unit.toString()});
+    if (std.math.approxEqAbs(f64, src_num, std.math.round(src_num), epsilon)) {
+        std.debug.print("{} {s}\n", .{ @floatToInt(u64, src_num), unit.toString() });
+        return;
+    }
+
+    std.debug.print("{d:.2} {s}\n", .{ src_num, unit.toString() });
 }
 
 pub fn main() !void {
