@@ -51,6 +51,43 @@ const BaseUnit = enum {
         }
     }
 
+    /// toSIMult returns the multiplier one has to apply to turn a value from the given unit to the SI unit for that
+    /// metric.
+    pub fn toSIMult(self: BaseUnit) f64 {
+        return switch (self) {
+            .bits => 8,
+            .bytes => 1,
+            .kilobytes => 1e3,
+            .kibibytes => 1024,
+            .megabytes => 1e6,
+            .mebibytes => 1024 * 1024,
+            .giagabytes => 1e9,
+            .gibibytes => 1024 * 1024 * 1024,
+            .terabytes => 1e12,
+            .tebibytes => 1024 * 1024 * 1024 * 1024,
+
+            .nanoseconds => 1.0 / 1e9,
+            .microseconds => 1.0 / 1e6,
+            .miliseconds => 1.0 / 1e3,
+            .seconds => 1.0,
+            .minutes => 60,
+            .hours => 60 * 60,
+            .days => 60 * 60 * 24,
+            .weeks => 60 * 60 * 24 * 7,
+            .years => 60 * 60 * 24 * 365,
+        };
+    }
+
+    /// toSI convers n in the unit into the SI unit for that metric.
+    pub fn toSI(self: BaseUnit, n: f64) f64 {
+        return n * self.toSIMult();
+    }
+
+    /// fromSI converts n in the SI unit for the metric into the given unit.
+    pub fn fromSI(self: BaseUnit, n: f64) f64 {
+        return n / self.toSIMult();
+    }
+
     /// toString returns a canonical string for the given base unit, suitable for user feedback.
     pub fn toString(self: BaseUnit) []const u8 {
         return baseUnitNames[@enumToInt(self)][0];
@@ -126,14 +163,18 @@ fn run(args: [][:0]const u8) !void {
     const src = try splitAmountAndUnit(args[1]);
 
     const src_num = std.fmt.parseFloat(f64, src.amount) catch return error.CouldNotParseAmount;
-    const unit = try parseUnit(src.unit);
+    const src_unit = try parseUnit(src.unit);
 
-    if (std.math.approxEqAbs(f64, src_num, std.math.round(src_num), epsilon)) {
-        std.debug.print("{} {s}\n", .{ @floatToInt(u64, src_num), unit.toString() });
+    const target_unit = try parseUnit(args[2]);
+
+    const res_num = target_unit.fromSI(src_unit.toSI(src_num));
+
+    if (std.math.approxEqAbs(f64, res_num, std.math.round(src_num), epsilon)) {
+        std.debug.print("{} {s}\n", .{ @floatToInt(u64, res_num), target_unit.toString() });
         return;
     }
 
-    std.debug.print("{d:.2} {s}\n", .{ src_num, unit.toString() });
+    std.debug.print("{d:.2} {s}\n", .{ res_num, target_unit.toString() });
 }
 
 pub fn main() !void {
