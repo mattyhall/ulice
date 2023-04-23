@@ -111,10 +111,10 @@ const Unit = union(enum) {
     }
 
     /// toString turns the unit into a user readable string.
-    pub fn toString(self: Unit) []const u8 {
+    pub fn toString(self: Unit, a: std.mem.Allocator) ![]const u8 {
         return switch (self) {
-            .basic => |b| b.toString(),
-            else => unreachable,
+            .basic => |b| try a.dupe(u8, b.toString()),
+            .composite => |c| try std.fmt.allocPrint(a, "{s}/{s}", .{ c.num.toString(), c.den.toString() }),
         };
     }
 
@@ -226,7 +226,14 @@ fn convert(src_num: f64, src_unit: Unit, target_unit: Unit) !f64 {
 }
 
 /// run is the real main of the program - it takes the command line arguments and tries to convert them.
-fn run(args: [][:0]const u8) !void {
+fn run() !void {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    var a = arena.allocator();
+
+    var args = try std.process.argsAlloc(a);
+
+    defer std.process.argsFree(a, args);
+
     if (args.len != 3) return error.NotEnoughArgs;
 
     const src = try splitAmountAndUnit(args[1]);
@@ -239,21 +246,15 @@ fn run(args: [][:0]const u8) !void {
     const res_num = try convert(src_num, src_unit, target_unit);
 
     if (std.math.approxEqAbs(f64, res_num, std.math.round(res_num), epsilon)) {
-        std.debug.print("{} {s}\n", .{ @floatToInt(u64, res_num), target_unit.toString() });
+        std.debug.print("{} {s}\n", .{ @floatToInt(u64, res_num), try target_unit.toString(a) });
         return;
     }
 
-    std.debug.print("{d:.2} {s}\n", .{ res_num, target_unit.toString() });
+    std.debug.print("{d:.2} {s}\n", .{ res_num, try target_unit.toString(a) });
 }
 
 pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    var a = arena.allocator();
-
-    var args = try std.process.argsAlloc(a);
-    defer std.process.argsFree(a, args);
-
-    run(args) catch |e| {
+    run() catch |e| {
         switch (e) {
             error.NotEnoughArgs => std.debug.print(
                 \\You must pass two arguments to ulice: <number><source unit> <target unit>, e.g
