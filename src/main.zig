@@ -4,6 +4,9 @@ const std = @import("std");
 /// abs(x - y) <= epsilon then we consider them the same value.
 const epsilon = 0.005;
 
+/// compositeChars are the characters that a unit must have in to trigger a check to see if it is a composite;
+const compositeChars = "p/";
+
 /// Metric is something that can be measured, e.g. time, file size etc.
 const Metric = enum {
     data_size,
@@ -15,7 +18,7 @@ const Metric = enum {
         switch (self) {
             .data_size => .bytes,
             .time => .seconds,
-            .bandiwdth => .{ .composite = .{ .quot = .bits, .div = .seconds } },
+            .bandiwdth => .{ .composite = .{ .num = .bits, .den = .seconds } },
         }
     }
 };
@@ -97,7 +100,7 @@ const BaseUnit = enum {
 /// Unit is a unit of an amount. It can either by a simple unit (basic) or a composite one (e.g Mb/s).
 const Unit = union(enum) {
     basic: BaseUnit,
-    composite: struct { quot: BaseUnit, div: BaseUnit },
+    composite: struct { num: BaseUnit, den: BaseUnit },
 
     /// metric returns the metric that the Unit measures.
     pub fn metric(self: Unit) Metric {
@@ -184,9 +187,36 @@ fn parseBaseUnit(s: []const u8) !BaseUnit {
     return error.UnitNotFound;
 }
 
+/// splitComposite splits s into the numerator and deominator strings of the unit - e.g. mb/s returns "mb" and "s".
+fn splitComposite(s: []const u8) !struct { num: []const u8, den: []const u8 } {
+    if (s.len <= 1) return error.NotComposite;
+
+    for (s, 0..) |c, i| {
+        if (i == s.len - 1) return error.NotComposite;
+
+        if (std.mem.indexOf(u8, compositeChars, &.{c}) != null) return .{ .num = s[0..i], .den = s[i + 1 ..] };
+    }
+
+    return error.NotComposite;
+}
+
 /// parseUnit takes a string and turns it into a Unit.
 fn parseUnit(s: []const u8) !Unit {
-    return Unit{ .basic = try parseBaseUnit(s) };
+    const composite = b: {
+        inline for (compositeChars) |c| {
+            if (std.mem.indexOf(u8, s, &.{c}) != null) break :b true;
+        }
+
+        break :b false;
+    };
+
+    if (!composite) return Unit{ .basic = try parseBaseUnit(s) };
+
+    const comp = splitComposite(s) catch {
+        return Unit{ .basic = try parseBaseUnit(s) };
+    };
+
+    return .{ .composite = .{ .num = try parseBaseUnit(comp.num), .den = try parseBaseUnit(comp.den) } };
 }
 
 /// convert converts src_num (in src_units) to an amount in target_unit's.
@@ -246,6 +276,10 @@ pub fn main() !void {
 
 const testing = std.testing;
 
+fn convertBasic(n: f64, from: BaseUnit, to: BaseUnit) !f64 {
+    return convert(n, .{ .basic = from }, .{ .basic = to });
+}
+
 fn testSplit(s: []const u8, num: []const u8, unit: []const u8) !void {
     const res = try splitAmountAndUnit(s);
 
@@ -253,8 +287,11 @@ fn testSplit(s: []const u8, num: []const u8, unit: []const u8) !void {
     try testing.expectEqualStrings(unit, res.unit);
 }
 
-fn convertBasic(n: f64, from: BaseUnit, to: BaseUnit) !f64 {
-    return convert(n, .{ .basic = from }, .{ .basic = to });
+fn testSplitComposite(s: []const u8, num: []const u8, den: []const u8) !void {
+    const comp = try splitComposite(s);
+
+    try testing.expectEqualStrings(num, comp.num);
+    try testing.expectEqualStrings(den, comp.den);
 }
 
 test "split" {
@@ -278,4 +315,16 @@ test "convert basic" {
 test "convert mismatched metrics" {
     try testing.expectError(error.MismatchedMetrics, convertBasic(1, .bytes, .seconds));
     try testing.expectError(error.MismatchedMetrics, convertBasic(1, .nanoseconds, .terabytes));
+}
+
+test "split composite" {
+    try testSplitComposite("B/s", "B", "s");
+    try testSplitComposite("MiB/min", "MiB", "min");
+    try testSplitComposite("Bps", "B", "s");
+    try testSplitComposite("MiBpmin", "MiB", "min");
+}
+
+test "parse unit" {
+    try testing.expectEqual(Unit{ .composite = .{ .num = .bytes, .den = .seconds } }, try parseUnit("B/s"));
+    try testing.expectEqual(Unit{ .composite = .{ .num = .bytes, .den = .seconds } }, try parseUnit("Bps"));
 }
