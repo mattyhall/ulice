@@ -101,10 +101,34 @@ const Unit = union(enum) {
 
     /// metric returns the metric that the Unit measures.
     pub fn metric(self: Unit) Metric {
-        switch (self) {
+        return switch (self) {
             .basic => |b| b.metric(),
             else => unreachable,
-        }
+        };
+    }
+
+    /// toString turns the unit into a user readable string.
+    pub fn toString(self: Unit) []const u8 {
+        return switch (self) {
+            .basic => |b| b.toString(),
+            else => unreachable,
+        };
+    }
+
+    /// toSI convers n in the unit into the SI unit for that metric.
+    pub fn toSI(self: Unit, n: f64) f64 {
+        return switch (self) {
+            .basic => |b| b.toSI(n),
+            else => unreachable,
+        };
+    }
+
+    /// fromSI converts n in the SI unit for the metric into the given unit.
+    pub fn fromSI(self: Unit, n: f64) f64 {
+        return switch (self) {
+            .basic => |b| b.fromSI(n),
+            else => unreachable,
+        };
     }
 };
 
@@ -147,10 +171,10 @@ fn splitAmountAndUnit(s: []const u8) !struct { amount: []const u8, unit: []const
     return error.AmountAndUnitRequired;
 }
 
-/// parseUnit takes a string and turns it into a BaseUnit.
+/// parseBaseUnit takes a string and turns it into a BaseUnit.
 ///
 /// NOTE: This is done by matching the string against the values in baseUnitNames.
-fn parseUnit(s: []const u8) !BaseUnit {
+fn parseBaseUnit(s: []const u8) !BaseUnit {
     for (baseUnitNames, 0..) |names, i| {
         for (names) |name| {
             if (std.mem.eql(u8, s, name)) return try std.meta.intToEnum(BaseUnit, i);
@@ -160,8 +184,13 @@ fn parseUnit(s: []const u8) !BaseUnit {
     return error.UnitNotFound;
 }
 
+/// parseUnit takes a string and turns it into a Unit.
+fn parseUnit(s: []const u8) !Unit {
+    return Unit{ .basic = try parseBaseUnit(s) };
+}
+
 /// convert converts src_num (in src_units) to an amount in target_unit's.
-fn convert(src_num: f64, src_unit: BaseUnit, target_unit: BaseUnit) !f64 {
+fn convert(src_num: f64, src_unit: Unit, target_unit: Unit) !f64 {
     if (target_unit.metric() != src_unit.metric()) return error.MismatchedMetrics;
     return target_unit.fromSI(src_unit.toSI(src_num));
 }
@@ -224,6 +253,10 @@ fn testSplit(s: []const u8, num: []const u8, unit: []const u8) !void {
     try testing.expectEqualStrings(unit, res.unit);
 }
 
+fn convertBasic(n: f64, from: BaseUnit, to: BaseUnit) !f64 {
+    return convert(n, .{ .basic = from }, .{ .basic = to });
+}
+
 test "split" {
     try testSplit("147bytes", "147", "bytes");
     try testSplit("147mib", "147", "mib");
@@ -234,15 +267,15 @@ test "split amount and unit required" {
     try testing.expectError(error.AmountAndUnitRequired, splitAmountAndUnit("bytes"));
 }
 
-test "convert" {
-    try testing.expectApproxEqAbs(@as(f64, 147), try convert(147 * 1024, .bytes, .kibibytes), epsilon);
-    try testing.expectApproxEqAbs(@as(f64, 147), try convert(147 * 1024, .kibibytes, .mebibytes), epsilon);
+test "convert basic" {
+    try testing.expectApproxEqAbs(@as(f64, 147), try convertBasic(147 * 1024, .bytes, .kibibytes), epsilon);
+    try testing.expectApproxEqAbs(@as(f64, 147), try convertBasic(147 * 1024, .kibibytes, .mebibytes), epsilon);
 
-    try testing.expectApproxEqAbs(@as(f64, 147), try convert(147 * 24 * 60 * 60, .seconds, .days), epsilon);
-    try testing.expectApproxEqAbs(@as(f64, 2.45), try convert(147 * 1e9, .nanoseconds, .minutes), epsilon);
+    try testing.expectApproxEqAbs(@as(f64, 147), try convertBasic(147 * 24 * 60 * 60, .seconds, .days), epsilon);
+    try testing.expectApproxEqAbs(@as(f64, 2.45), try convertBasic(147 * 1e9, .nanoseconds, .minutes), epsilon);
 }
 
 test "convert mismatched metrics" {
-    try testing.expectError(error.MismatchedMetrics, convert(1, .bytes, .seconds));
-    try testing.expectError(error.MismatchedMetrics, convert(1, .nanoseconds, .terabytes));
+    try testing.expectError(error.MismatchedMetrics, convertBasic(1, .bytes, .seconds));
+    try testing.expectError(error.MismatchedMetrics, convertBasic(1, .nanoseconds, .terabytes));
 }
