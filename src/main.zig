@@ -137,7 +137,11 @@ fn splitAmountAndUnit(s: []const u8) !struct { amount: []const u8, unit: []const
     if (s.len <= 1) return error.AmountAndUnitRequired;
 
     for (s, 0..) |c, i| {
-        if (!std.ascii.isDigit(c)) return .{ .amount = s[0..i], .unit = s[i..] };
+        if (!std.ascii.isDigit(c)) {
+            if (i == 0) return error.AmountAndUnitRequired;
+
+            return .{ .amount = s[0..i], .unit = s[i..] };
+        }
     }
 
     return error.AmountAndUnitRequired;
@@ -156,6 +160,12 @@ fn parseUnit(s: []const u8) !BaseUnit {
     return error.UnitNotFound;
 }
 
+/// convert converts src_num (in src_units) to an amount in target_unit's.
+fn convert(src_num: f64, src_unit: BaseUnit, target_unit: BaseUnit) !f64 {
+    if (target_unit.metric() != src_unit.metric()) return error.MismatchedMetrics;
+    return target_unit.fromSI(src_unit.toSI(src_num));
+}
+
 /// run is the real main of the program - it takes the command line arguments and tries to convert them.
 fn run(args: [][:0]const u8) !void {
     if (args.len != 3) return error.NotEnoughArgs;
@@ -167,9 +177,7 @@ fn run(args: [][:0]const u8) !void {
 
     const target_unit = try parseUnit(args[2]);
 
-    if (target_unit.metric() != src_unit.metric()) return error.MismatchedMetrics;
-
-    const res_num = target_unit.fromSI(src_unit.toSI(src_num));
+    const res_num = try convert(src_num, src_unit, target_unit);
 
     if (std.math.approxEqAbs(f64, res_num, std.math.round(src_num), epsilon)) {
         std.debug.print("{} {s}\n", .{ @floatToInt(u64, res_num), target_unit.toString() });
@@ -205,4 +213,36 @@ pub fn main() !void {
 
         std.os.exit(1);
     };
+}
+
+const testing = std.testing;
+
+fn testSplit(s: []const u8, num: []const u8, unit: []const u8) !void {
+    const res = try splitAmountAndUnit(s);
+
+    try testing.expectEqualStrings(num, res.amount);
+    try testing.expectEqualStrings(unit, res.unit);
+}
+
+test "split" {
+    try testSplit("147bytes", "147", "bytes");
+    try testSplit("147mib", "147", "mib");
+}
+
+test "split amount and unit required" {
+    try testing.expectError(error.AmountAndUnitRequired, splitAmountAndUnit("147"));
+    try testing.expectError(error.AmountAndUnitRequired, splitAmountAndUnit("bytes"));
+}
+
+test "convert" {
+    try testing.expectApproxEqAbs(@as(f64, 147), try convert(147 * 1024, .bytes, .kibibytes), epsilon);
+    try testing.expectApproxEqAbs(@as(f64, 147), try convert(147 * 1024, .kibibytes, .mebibytes), epsilon);
+
+    try testing.expectApproxEqAbs(@as(f64, 147), try convert(147 * 24 * 60 * 60, .seconds, .days), epsilon);
+    try testing.expectApproxEqAbs(@as(f64, 2.45), try convert(147 * 1e9, .nanoseconds, .minutes), epsilon);
+}
+
+test "convert mismatched metrics" {
+    try testing.expectError(error.MismatchedMetrics, convert(1, .bytes, .seconds));
+    try testing.expectError(error.MismatchedMetrics, convert(1, .nanoseconds, .terabytes));
 }
