@@ -46,11 +46,14 @@ const BaseUnit = enum {
     weeks,
     years,
 
+    auto,
+
     /// metric returns the metric that a BaseUnit measures. E.g. bytes measures data size.
     pub fn metric(self: BaseUnit) Metric {
         return switch (self) {
             .bits, .bytes, .kilobytes, .kibibytes, .megabytes, .mebibytes, .giagabytes, .gibibytes, .terabytes, .tebibytes => .data_size,
             .nanoseconds, .microseconds, .miliseconds, .seconds, .minutes, .hours, .days, .weeks, .years => .time,
+            .auto => unreachable,
         };
     }
 
@@ -78,6 +81,8 @@ const BaseUnit = enum {
             .days => 60 * 60 * 24,
             .weeks => 60 * 60 * 24 * 7,
             .years => 60 * 60 * 24 * 365,
+
+            .auto => unreachable,
         };
     }
 
@@ -156,10 +161,13 @@ const baseUnitNames = [_][]const []const u8{
     &[_][]const u8{ "us", "microseconds", "microsecond", "" },
     &[_][]const u8{ "ms", "miliseconds", "milisecond", "" },
     &[_][]const u8{ "s", "seconds", "second", "sec", "secs", "" },
+    &[_][]const u8{ "mins", "minutes", "min", "" },
     &[_][]const u8{ "days", "day", "d", "ds", "" },
     &[_][]const u8{ "hr", "hours", "hour", "hrs", "h", "" },
     &[_][]const u8{ "wk", "weeks", "week", "wks", "w", "" },
     &[_][]const u8{ "yr", "years", "year", "yrs", "y", "" },
+
+    &[_][]const u8{ "auto", "?" },
 };
 
 /// splitAmountAndUnit takes a string like "7bits" and splits it into two substrings - the amount and the unit.
@@ -222,8 +230,36 @@ fn parseUnit(s: []const u8) !Unit {
     return .{ .composite = .{ .num = try parseBaseUnit(comp.num), .den = try parseBaseUnit(comp.den) } };
 }
 
+/// convertAuto converts num into the largest possible unit in the metric that unit has, and assigns that unit to
+/// res_unit.
+fn convertAuto(num: f64, unit: Unit, res_unit: *Unit) !f64 {
+    var target_unit: ?Unit = null;
+
+    for (0..@enumToInt(BaseUnit.auto)) |i| {
+        var u = Unit{ .basic = @intToEnum(BaseUnit, i) };
+        if (u.metric() != unit.metric()) continue;
+
+        if (target_unit == null) target_unit = u;
+
+        const val = try convert(num, unit, &u);
+
+        if (val < 1) break;
+
+        if (val >= 1.0) target_unit = u;
+    }
+
+    res_unit.* = target_unit orelse unreachable;
+
+    return convert(num, unit, res_unit);
+}
+
 /// convert converts src_num (in src_units) to an amount in target_unit's.
-fn convert(src_num: f64, src_unit: Unit, target_unit: Unit) !f64 {
+///
+/// NOTE: If target_unit is auto then the highest possible unit for src_unit's metric is chosen and target_unit is set
+/// to it.
+fn convert(src_num: f64, src_unit: Unit, target_unit: *Unit) !f64 {
+    if (target_unit.* == .basic and target_unit.basic == .auto) return convertAuto(src_num, src_unit, target_unit);
+
     if (target_unit.metric() != src_unit.metric()) return error.MismatchedMetrics;
     return target_unit.fromSI(src_unit.toSI(src_num));
 }
@@ -244,9 +280,8 @@ fn run() !void {
     const src_num = std.fmt.parseFloat(f64, src.amount) catch return error.CouldNotParseAmount;
     const src_unit = try parseUnit(src.unit);
 
-    const target_unit = try parseUnit(args[2]);
-
-    const res_num = try convert(src_num, src_unit, target_unit);
+    var target_unit = try parseUnit(args[2]);
+    const res_num = try convert(src_num, src_unit, &target_unit);
 
     if (std.math.approxEqAbs(f64, res_num, std.math.round(res_num), epsilon)) {
         std.debug.print("{} {s}\n", .{ @floatToInt(u64, res_num), try target_unit.toString(a) });
@@ -281,7 +316,17 @@ pub fn main() !void {
 const testing = std.testing;
 
 fn convertBasic(n: f64, from: BaseUnit, to: BaseUnit) !f64 {
-    return convert(n, .{ .basic = from }, .{ .basic = to });
+    var to_unit = .{ .basic = to };
+    return convert(n, .{ .basic = from }, &to_unit);
+}
+
+fn testConvertAuto(n: f64, from: BaseUnit, res_num: f64, res_unit: BaseUnit) !void {
+    var to = Unit{ .basic = .auto };
+
+    const res = try convert(n, .{ .basic = from }, &to);
+
+    try testing.expectEqual(res_unit, to.basic);
+    try testing.expectApproxEqAbs(res_num, res, epsilon);
 }
 
 fn testSplit(s: []const u8, num: []const u8, unit: []const u8) !void {
@@ -316,44 +361,40 @@ test "convert basic" {
     try testing.expectApproxEqAbs(@as(f64, 2.45), try convertBasic(147 * 1e9, .nanoseconds, .minutes), epsilon);
 }
 
+test "convert auto" {
+    try testConvertAuto(147 * 1024, .bytes, 147, .kibibytes);
+
+    try testConvertAuto(7, .bits, 7, .bits);
+
+    try testConvertAuto(24 * 60 * 60, .seconds, 1, .days);
+}
+
 test "convert composite" {
+    var to: Unit = .{ .composite = .{ .num = .kibibytes, .den = .seconds } };
     try testing.expectApproxEqAbs(
         @as(f64, 147),
-        try convert(
-            147 * 1024,
-            .{ .composite = .{ .num = .bytes, .den = .seconds } },
-            .{ .composite = .{ .num = .kibibytes, .den = .seconds } },
-        ),
+        try convert(147 * 1024, .{ .composite = .{ .num = .bytes, .den = .seconds } }, &to),
         epsilon,
     );
 
+    to = .{ .composite = .{ .num = .bytes, .den = .seconds } };
     try testing.expectApproxEqAbs(
         @as(f64, 147 * 1024),
-        try convert(
-            147,
-            .{ .composite = .{ .num = .kibibytes, .den = .seconds } },
-            .{ .composite = .{ .num = .bytes, .den = .seconds } },
-        ),
+        try convert(147, .{ .composite = .{ .num = .kibibytes, .den = .seconds } }, &to),
         epsilon,
     );
 
+    to = .{ .composite = .{ .num = .kibibytes, .den = .minutes } };
     try testing.expectApproxEqAbs(
         @as(f64, 147),
-        try convert(
-            147 * 1024 * 60,
-            .{ .composite = .{ .num = .bytes, .den = .seconds } },
-            .{ .composite = .{ .num = .kibibytes, .den = .minutes } },
-        ),
+        try convert(147 * 1024 * 60, .{ .composite = .{ .num = .bytes, .den = .seconds } }, &to),
         epsilon,
     );
 
+    to = .{ .composite = .{ .num = .bytes, .den = .seconds } };
     try testing.expectApproxEqAbs(
-        @as(f64, (147.0 * 1024.0)/60.0),
-        try convert(
-            147,
-            .{ .composite = .{ .num = .kibibytes, .den = .minutes } },
-            .{ .composite = .{ .num = .bytes, .den = .seconds } },
-        ),
+        @as(f64, (147.0 * 1024.0) / 60.0),
+        try convert(147, .{ .composite = .{ .num = .kibibytes, .den = .minutes } }, &to),
         epsilon,
     );
 }
@@ -371,6 +412,8 @@ test "split composite" {
 }
 
 test "parse unit" {
+    try testing.expectEqual(Unit{ .basic = .auto }, try parseUnit("auto"));
+
     try testing.expectEqual(Unit{ .composite = .{ .num = .bytes, .den = .seconds } }, try parseUnit("B/s"));
     try testing.expectEqual(Unit{ .composite = .{ .num = .bytes, .den = .seconds } }, try parseUnit("Bps"));
 }
