@@ -45,10 +45,10 @@ const BaseUnit = enum {
 
     /// metric returns the metric that a BaseUnit measures. E.g. bytes measures data size.
     pub fn metric(self: BaseUnit) Metric {
-        switch (self) {
+        return switch (self) {
             .bits, .bytes, .kilobytes, .kibibytes, .megabytes, .mebibytes, .giagabytes, .gibibytes, .terabytes, .tebibytes => .data_size,
             .nanoseconds, .microseconds, .miliseconds, .seconds, .minutes, .hours, .days, .weeks, .years => .time,
-        }
+        };
     }
 
     /// toSIMult returns the multiplier one has to apply to turn a value from the given unit to the SI unit for that
@@ -167,6 +167,8 @@ fn run(args: [][:0]const u8) !void {
 
     const target_unit = try parseUnit(args[2]);
 
+    if (target_unit.metric() != src_unit.metric()) return error.MismatchedMetrics;
+
     const res_num = target_unit.fromSI(src_unit.toSI(src_num));
 
     if (std.math.approxEqAbs(f64, res_num, std.math.round(src_num), epsilon)) {
@@ -197,6 +199,7 @@ pub fn main() !void {
             ),
             error.CouldNotParseAmount => std.debug.print("Amount must be a valid float\n", .{}),
             error.UnitNotFound => std.debug.print("Unrecognised unit\n", .{}),
+            error.MismatchedMetrics => std.debug.print("Both units must be of the same metric (e.g. data size, time)\n", .{}),
             else => std.debug.print("Unknown error: {}\n", .{e}),
         }
 
