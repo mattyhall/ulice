@@ -46,14 +46,20 @@
           zig = pkgs.zigpkgs.master-2023-04-22;
         in
           rec {
-            devShell = pkgs.mkShell {
-              buildInputs = (with pkgs; [
-                zlspkgs.default
-                zig
-                bashInteractive
-                gdb
-                lldb
-              ]);
+            devShells = {
+              default = pkgs.mkShell {
+                buildInputs = (with pkgs; [
+                  zlspkgs.default
+                  zig
+                  gdb
+                ]);
+              };
+
+              ci = pkgs.mkShell {
+                buildInputs = (with pkgs; [ 
+                  zig 
+                ]);
+              };
             };
 
             packages.default = packages.ulice;
