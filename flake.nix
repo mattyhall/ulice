@@ -2,7 +2,7 @@
   description = "A units replacement in Zig";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs";
 
     gitignore = {
       url = "github:hercules-ci/gitignore.nix";
