@@ -31,7 +31,7 @@ const BaseUnit = enum {
     kibibytes,
     megabytes,
     mebibytes,
-    giagabytes,
+    gigabytes,
     gibibytes,
     terabytes,
     tebibytes,
@@ -56,7 +56,7 @@ const BaseUnit = enum {
     /// metric returns the metric that a BaseUnit measures. E.g. bytes measures data size.
     pub fn metric(self: BaseUnit) Metric {
         return switch (self) {
-            .bits, .bytes, .kilobytes, .kibibytes, .megabytes, .mebibytes, .giagabytes, .gibibytes, .terabytes, .tebibytes => .data_size,
+            .bits, .bytes, .kilobytes, .kibibytes, .megabytes, .mebibytes, .gigabytes, .gibibytes, .terabytes, .tebibytes => .data_size,
             .nanoseconds, .microseconds, .miliseconds, .seconds, .minutes, .hours, .days, .weeks, .years => .time,
             .auto => unreachable,
         };
@@ -72,7 +72,7 @@ const BaseUnit = enum {
             .kibibytes => 1024,
             .megabytes => 1e6,
             .mebibytes => 1024 * 1024,
-            .giagabytes => 1e9,
+            .gigabytes => 1e9,
             .gibibytes => 1024 * 1024 * 1024,
             .terabytes => 1e12,
             .tebibytes => 1024 * 1024 * 1024 * 1024,
@@ -150,29 +150,33 @@ const Unit = union(enum) {
 
 /// baseUnitNames contains a row for every BaseUnit (in order of the tag's declariation) and the row contains synonyms
 /// for the unit.
-const baseUnitNames = [BaseUnit.count()][]const []const u8{
-    &[_][]const u8{ "bits", "bit", "bi", "b", "" },
-    &[_][]const u8{ "bytes", "byte", "B", "" },
-    &[_][]const u8{ "KB", "kilobytes", "kb", "" },
-    &[_][]const u8{ "KiB", "kibibytes", "kib", "" },
-    &[_][]const u8{ "MB", "megabytes", "mb", "" },
-    &[_][]const u8{ "MiB", "mebibytes", "mib", "" },
-    &[_][]const u8{ "GB", "gigabytes", "gb", "" },
-    &[_][]const u8{ "GiB", "gibibytes", "gib", "" },
-    &[_][]const u8{ "TB", "terabytes", "tb", "" },
-    &[_][]const u8{ "TiB", "tibibytes", "tib", "" },
+const baseUnitNames = b: {
+    var res: [BaseUnit.count()][]const []const u8 = undefined;
 
-    &[_][]const u8{ "ns", "nanoseconds", "nanosecond", "" },
-    &[_][]const u8{ "us", "microseconds", "microsecond", "" },
-    &[_][]const u8{ "ms", "miliseconds", "milisecond", "" },
-    &[_][]const u8{ "s", "seconds", "second", "sec", "secs", "" },
-    &[_][]const u8{ "mins", "minutes", "min", "" },
-    &[_][]const u8{ "days", "day", "d", "ds", "" },
-    &[_][]const u8{ "hr", "hours", "hour", "hrs", "h", "" },
-    &[_][]const u8{ "wk", "weeks", "week", "wks", "w", "" },
-    &[_][]const u8{ "yr", "years", "year", "yrs", "y", "" },
+    res[@enumToInt(BaseUnit.bits)] = &[_][]const u8{ "bits", "bit", "bi", "b", "" };
+    res[@enumToInt(BaseUnit.bytes)] = &[_][]const u8{ "bytes", "byte", "B", "" };
+    res[@enumToInt(BaseUnit.kilobytes)] = &[_][]const u8{ "KB", "kilobytes", "kb", "" };
+    res[@enumToInt(BaseUnit.kibibytes)] = &[_][]const u8{ "KiB", "kibibytes", "kib", "" };
+    res[@enumToInt(BaseUnit.megabytes)] = &[_][]const u8{ "MB", "megabytes", "mb", "" };
+    res[@enumToInt(BaseUnit.mebibytes)] = &[_][]const u8{ "MiB", "mebibytes", "mib", "" };
+    res[@enumToInt(BaseUnit.gigabytes)] = &[_][]const u8{ "GB", "gigabytes", "gb", "" };
+    res[@enumToInt(BaseUnit.gibibytes)] = &[_][]const u8{ "GiB", "gibibytes", "gib", "" };
+    res[@enumToInt(BaseUnit.terabytes)] = &[_][]const u8{ "TB", "terabytes", "tb", "" };
+    res[@enumToInt(BaseUnit.tebibytes)] = &[_][]const u8{ "TiB", "tibibytes", "tib", "" };
 
-    &[_][]const u8{ "auto", "?" },
+    res[@enumToInt(BaseUnit.nanoseconds)] = &[_][]const u8{ "ns", "nanoseconds", "nanosecond", "" };
+    res[@enumToInt(BaseUnit.microseconds)] = &[_][]const u8{ "us", "microseconds", "microsecond", "" };
+    res[@enumToInt(BaseUnit.miliseconds)] = &[_][]const u8{ "ms", "miliseconds", "milisecond", "" };
+    res[@enumToInt(BaseUnit.seconds)] = &[_][]const u8{ "s", "seconds", "second", "sec", "secs", "" };
+    res[@enumToInt(BaseUnit.minutes)] = &[_][]const u8{ "mins", "minutes", "min", "" };
+    res[@enumToInt(BaseUnit.hours)] = &[_][]const u8{ "hr", "hours", "hour", "hrs", "h", "" };
+    res[@enumToInt(BaseUnit.days)] = &[_][]const u8{ "days", "day", "d", "ds", "" };
+    res[@enumToInt(BaseUnit.weeks)] = &[_][]const u8{ "wk", "weeks", "week", "wks", "w", "" };
+    res[@enumToInt(BaseUnit.years)] = &[_][]const u8{ "yr", "years", "year", "yrs", "y", "" };
+
+    res[@enumToInt(BaseUnit.auto)] = &[_][]const u8{ "auto", "?" };
+
+    break :b res;
 };
 
 /// splitAmountAndUnit takes a string like "7bits" and splits it into two substrings - the amount and the unit.
