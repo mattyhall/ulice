@@ -300,6 +300,46 @@ fn runUnitConversion(a: std.mem.Allocator, args: [][]const u8, precision: u4) !v
     std.debug.print("{d:.[2]} {s}\n", .{ res_num, try target_unit.toString(a), precision });
 }
 
+/// runTimeCalculator takes three arguments - speed, distance and time. Two of which need an amount and the other is a
+// unit that we solve for.
+fn runTimeCalculator(a: std.mem.Allocator, args: [][]const u8, precision: u4) !void {
+    if (args.len != 3) return error.NotEnoughArgs;
+
+    const f = try splitAmountAndUnit(args[0]);
+    const s = try splitAmountAndUnit(args[1]);
+    const fst = try parseAmountAndUnit(f.amount, f.unit);
+    const snd = try parseAmountAndUnit(s.amount, s.unit);
+
+    var target_unit = try parseUnit(args[2]);
+
+    var speed: ?AmountAndUnit = null;
+    var data_size: ?AmountAndUnit = null;
+    var time: ?AmountAndUnit = null;
+
+    var metrics: [3]Metric = undefined;
+
+    for (&[_]Unit{ fst.u, snd.u, target_unit }, 0..) |u, i| {
+        const m = u.metric() orelse return error.UnknownMetric;
+        metrics[i] = m;
+        switch (m) {
+            .time => time = if (i == 0) fst else if (i == 1) snd else null,
+            .data_size => data_size = if (i == 0) fst else if (i == 1) snd else null,
+            .bandwidth => speed = if (i == 0) fst else if (i == 1) snd else null,
+        }
+    }
+
+    for (&[_]Metric{ .time, .bandwidth, .data_size }) |m|
+        if (std.mem.indexOf(Metric, &metrics, &.{m}) == null) return error.WrongUnits;
+
+    // metrics[2] is that of target_unit, i.e. switch on what we are solving for.
+    const res = switch (metrics[2]) {
+        .bandwidth => target_unit.fromSI(data_size.?.u.toSI(data_size.?.a) / time.?.u.toSI(time.?.a)),
+        .time => target_unit.fromSI(speed.?.u.toSI(speed.?.a) / data_size.?.u.toSI(data_size.?.a)),
+        .data_size => target_unit.fromSI(speed.?.u.toSI(speed.?.a) * time.?.u.toSI(time.?.a)),
+    };
+    std.debug.print("{d:.[2]} {s}\n", .{ res, try target_unit.toString(a), precision });
+}
+
 /// run is the real main of the program - it takes the command line arguments and tries to convert them.
 fn run() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -307,13 +347,15 @@ fn run() !void {
 
     var opt = try simargs.parse(a, struct {
         precision: u4 = 2,
+        time: bool = false,
         help: bool = false,
 
         pub const __shorts__ = .{
             .precision = .p,
+            .time = .t,
             .help = .h,
         };
-    }, "[from] [to]");
+    }, "from [other] to");
 
     if (opt.args.help) {
         const stdout = std.io.getStdOut();
@@ -321,7 +363,10 @@ fn run() !void {
         std.os.exit(0);
     }
 
-    try runUnitConversion(a, opt.positional_args.items, opt.args.precision);
+    if (opt.args.time)
+        try runTimeCalculator(a, opt.positional_args.items, opt.args.precision)
+    else
+        try runUnitConversion(a, opt.positional_args.items, opt.args.precision);
 }
 
 pub fn main() !void {
