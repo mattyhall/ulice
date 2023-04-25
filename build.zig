@@ -15,6 +15,10 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
+    const simargs = b.addModule("simargs", .{
+        .source_file = .{ .path = "third_party/simargs/src/simargs.zig" },
+    });
+
     const exe = b.addExecutable(.{
         .name = "ulice",
         // In this case the main source file is merely a path, however, in more
@@ -23,6 +27,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    exe.addModule("simargs", simargs);
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default

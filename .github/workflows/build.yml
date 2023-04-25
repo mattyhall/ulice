@@ -18,4 +18,4 @@ jobs:
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
     - run: nix develop .#ci -c zig fmt --check .
     - run: nix develop .#ci -c zig build test
-    - run: nix build
+    - run: nix build ".?submodules=1"

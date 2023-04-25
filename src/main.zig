@@ -1,4 +1,5 @@
 const std = @import("std");
+const simargs = @import("simargs");
 
 /// epsilon is the maximum difference between floats before we consider them different values, i.e. if
 /// abs(x - y) <= epsilon then we consider them the same value.
@@ -279,26 +280,34 @@ fn run() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     var a = arena.allocator();
 
-    var args = try std.process.argsAlloc(a);
+    var opt = try simargs.parse(a, struct {
+        precision: u4 = 2,
+        help: bool = false,
 
-    defer std.process.argsFree(a, args);
+        pub const __shorts__ = .{
+            .precision = .p,
+            .help = .h,
+        };
+    }, "[from] [to]");
 
-    if (args.len != 3) return error.NotEnoughArgs;
+    if (opt.args.help) {
+        const stdout = std.io.getStdOut();
+        try opt.print_help(stdout.writer());
+        std.os.exit(0);
+    }
 
-    const src = try splitAmountAndUnit(args[1]);
+    const args = opt.positional_args.items;
+    if (args.len != 2) return error.NotEnoughArgs;
+
+    const src = try splitAmountAndUnit(args[0]);
 
     const src_num = std.fmt.parseFloat(f64, src.amount) catch return error.CouldNotParseAmount;
     const src_unit = try parseUnit(src.unit);
 
-    var target_unit = try parseUnit(args[2]);
+    var target_unit = try parseUnit(args[1]);
     const res_num = try convert(src_num, src_unit, &target_unit);
 
-    if (std.math.approxEqAbs(f64, res_num, std.math.round(res_num), epsilon)) {
-        std.debug.print("{} {s}\n", .{ @floatToInt(u64, res_num), try target_unit.toString(a) });
-        return;
-    }
-
-    std.debug.print("{d:.2} {s}\n", .{ res_num, try target_unit.toString(a) });
+    std.debug.print("{d:.[2]} {s}\n", .{ res_num, try target_unit.toString(a), opt.args.precision });
 }
 
 pub fn main() !void {
