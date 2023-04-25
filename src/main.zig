@@ -8,6 +8,9 @@ const epsilon = 0.005;
 /// compositeChars are the characters that a unit must have in to trigger a check to see if it is a composite;
 const compositeChars = "p/";
 
+/// AmountAndUnit packages an amount and a unit together.
+const AmountAndUnit = struct { a: f64, u: Unit };
+
 /// Metric is something that can be measured, e.g. time, file size etc.
 const Metric = enum {
     data_size,
@@ -240,6 +243,14 @@ fn parseUnit(s: []const u8) !Unit {
     return .{ .composite = .{ .num = try parseBaseUnit(comp.num), .den = try parseBaseUnit(comp.den) } };
 }
 
+/// parseAmountAndUnit takes an amount string and a unit string and parses both.
+fn parseAmountAndUnit(amount: []const u8, unit: []const u8) !AmountAndUnit {
+    return AmountAndUnit{
+        .a = std.fmt.parseFloat(f64, amount) catch return error.CouldNotParseAmount,
+        .u = try parseUnit(unit),
+    };
+}
+
 /// convertAuto converts num into the largest possible unit in the metric that unit has, and assigns that unit to
 /// res_unit.
 fn convertAuto(num: f64, unit: Unit, res_unit: *Unit) !f64 {
@@ -275,6 +286,20 @@ fn convert(src_num: f64, src_unit: Unit, target_unit: *Unit) !f64 {
     return target_unit.fromSI(src_unit.toSI(src_num));
 }
 
+/// runUnitConversion converts the first argument into the unit specified by the second argument, and outputs it with
+/// precision decimal places.
+fn runUnitConversion(a: std.mem.Allocator, args: [][]const u8, precision: u4) !void {
+    if (args.len != 2) return error.NotEnoughArgs;
+
+    const s = try splitAmountAndUnit(args[0]);
+    const src = try parseAmountAndUnit(s.amount, s.unit);
+
+    var target_unit = try parseUnit(args[1]);
+    const res_num = try convert(src.a, src.u, &target_unit);
+
+    std.debug.print("{d:.[2]} {s}\n", .{ res_num, try target_unit.toString(a), precision });
+}
+
 /// run is the real main of the program - it takes the command line arguments and tries to convert them.
 fn run() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -296,18 +321,7 @@ fn run() !void {
         std.os.exit(0);
     }
 
-    const args = opt.positional_args.items;
-    if (args.len != 2) return error.NotEnoughArgs;
-
-    const src = try splitAmountAndUnit(args[0]);
-
-    const src_num = std.fmt.parseFloat(f64, src.amount) catch return error.CouldNotParseAmount;
-    const src_unit = try parseUnit(src.unit);
-
-    var target_unit = try parseUnit(args[1]);
-    const res_num = try convert(src_num, src_unit, &target_unit);
-
-    std.debug.print("{d:.[2]} {s}\n", .{ res_num, try target_unit.toString(a), opt.args.precision });
+    try runUnitConversion(a, opt.positional_args.items, opt.args.precision);
 }
 
 pub fn main() !void {
