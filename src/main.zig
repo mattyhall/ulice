@@ -54,7 +54,7 @@ const BaseUnit = enum {
 
     /// count returns the number of variants in BaseUnit.
     pub fn count() usize {
-        return @enumToInt(BaseUnit.auto) + 1;
+        return @intFromEnum(BaseUnit.auto) + 1;
     }
 
     /// metric returns the metric that a BaseUnit measures. E.g. bytes measures data size.
@@ -107,7 +107,7 @@ const BaseUnit = enum {
 
     /// toString returns a canonical string for the given base unit, suitable for user feedback.
     pub fn toString(self: BaseUnit) []const u8 {
-        return baseUnitNames[@enumToInt(self)][0];
+        return baseUnitNames[@intFromEnum(self)][0];
     }
 };
 
@@ -157,28 +157,28 @@ const Unit = union(enum) {
 const baseUnitNames = b: {
     var res: [BaseUnit.count()][]const []const u8 = undefined;
 
-    res[@enumToInt(BaseUnit.bits)] = &[_][]const u8{ "bits", "bit", "bi", "b", "" };
-    res[@enumToInt(BaseUnit.bytes)] = &[_][]const u8{ "bytes", "byte", "B", "" };
-    res[@enumToInt(BaseUnit.kilobytes)] = &[_][]const u8{ "KB", "kilobytes", "kb", "" };
-    res[@enumToInt(BaseUnit.kibibytes)] = &[_][]const u8{ "KiB", "kibibytes", "kib", "" };
-    res[@enumToInt(BaseUnit.megabytes)] = &[_][]const u8{ "MB", "megabytes", "mb", "" };
-    res[@enumToInt(BaseUnit.mebibytes)] = &[_][]const u8{ "MiB", "mebibytes", "mib", "" };
-    res[@enumToInt(BaseUnit.gigabytes)] = &[_][]const u8{ "GB", "gigabytes", "gb", "" };
-    res[@enumToInt(BaseUnit.gibibytes)] = &[_][]const u8{ "GiB", "gibibytes", "gib", "" };
-    res[@enumToInt(BaseUnit.terabytes)] = &[_][]const u8{ "TB", "terabytes", "tb", "" };
-    res[@enumToInt(BaseUnit.tebibytes)] = &[_][]const u8{ "TiB", "tibibytes", "tib", "" };
+    res[@intFromEnum(BaseUnit.bits)] = &[_][]const u8{ "bits", "bit", "bi", "b", "" };
+    res[@intFromEnum(BaseUnit.bytes)] = &[_][]const u8{ "bytes", "byte", "B", "" };
+    res[@intFromEnum(BaseUnit.kilobytes)] = &[_][]const u8{ "KB", "kilobytes", "kb", "" };
+    res[@intFromEnum(BaseUnit.kibibytes)] = &[_][]const u8{ "KiB", "kibibytes", "kib", "" };
+    res[@intFromEnum(BaseUnit.megabytes)] = &[_][]const u8{ "MB", "megabytes", "mb", "" };
+    res[@intFromEnum(BaseUnit.mebibytes)] = &[_][]const u8{ "MiB", "mebibytes", "mib", "" };
+    res[@intFromEnum(BaseUnit.gigabytes)] = &[_][]const u8{ "GB", "gigabytes", "gb", "" };
+    res[@intFromEnum(BaseUnit.gibibytes)] = &[_][]const u8{ "GiB", "gibibytes", "gib", "" };
+    res[@intFromEnum(BaseUnit.terabytes)] = &[_][]const u8{ "TB", "terabytes", "tb", "" };
+    res[@intFromEnum(BaseUnit.tebibytes)] = &[_][]const u8{ "TiB", "tibibytes", "tib", "" };
 
-    res[@enumToInt(BaseUnit.nanoseconds)] = &[_][]const u8{ "ns", "nanoseconds", "nanosecond", "" };
-    res[@enumToInt(BaseUnit.microseconds)] = &[_][]const u8{ "us", "microseconds", "microsecond", "" };
-    res[@enumToInt(BaseUnit.miliseconds)] = &[_][]const u8{ "ms", "miliseconds", "milisecond", "" };
-    res[@enumToInt(BaseUnit.seconds)] = &[_][]const u8{ "s", "seconds", "second", "sec", "secs", "" };
-    res[@enumToInt(BaseUnit.minutes)] = &[_][]const u8{ "mins", "minutes", "min", "" };
-    res[@enumToInt(BaseUnit.hours)] = &[_][]const u8{ "hr", "hours", "hour", "hrs", "h", "" };
-    res[@enumToInt(BaseUnit.days)] = &[_][]const u8{ "days", "day", "d", "ds", "" };
-    res[@enumToInt(BaseUnit.weeks)] = &[_][]const u8{ "wk", "weeks", "week", "wks", "w", "" };
-    res[@enumToInt(BaseUnit.years)] = &[_][]const u8{ "yr", "years", "year", "yrs", "y", "" };
+    res[@intFromEnum(BaseUnit.nanoseconds)] = &[_][]const u8{ "ns", "nanoseconds", "nanosecond", "" };
+    res[@intFromEnum(BaseUnit.microseconds)] = &[_][]const u8{ "us", "microseconds", "microsecond", "" };
+    res[@intFromEnum(BaseUnit.miliseconds)] = &[_][]const u8{ "ms", "miliseconds", "milisecond", "" };
+    res[@intFromEnum(BaseUnit.seconds)] = &[_][]const u8{ "s", "seconds", "second", "sec", "secs", "" };
+    res[@intFromEnum(BaseUnit.minutes)] = &[_][]const u8{ "mins", "minutes", "min", "" };
+    res[@intFromEnum(BaseUnit.hours)] = &[_][]const u8{ "hr", "hours", "hour", "hrs", "h", "" };
+    res[@intFromEnum(BaseUnit.days)] = &[_][]const u8{ "days", "day", "d", "ds", "" };
+    res[@intFromEnum(BaseUnit.weeks)] = &[_][]const u8{ "wk", "weeks", "week", "wks", "w", "" };
+    res[@intFromEnum(BaseUnit.years)] = &[_][]const u8{ "yr", "years", "year", "yrs", "y", "" };
 
-    res[@enumToInt(BaseUnit.auto)] = &[_][]const u8{ "auto", "?" };
+    res[@intFromEnum(BaseUnit.auto)] = &[_][]const u8{ "auto", "?" };
 
     break :b res;
 };
@@ -256,8 +256,8 @@ fn parseAmountAndUnit(amount: []const u8, unit: []const u8) !AmountAndUnit {
 fn convertAuto(num: f64, unit: Unit, res_unit: *Unit) !f64 {
     var target_unit: ?Unit = null;
 
-    for (0..@enumToInt(BaseUnit.auto)) |i| {
-        var u = Unit{ .basic = @intToEnum(BaseUnit, i) };
+    for (0..@intFromEnum(BaseUnit.auto)) |i| {
+        var u = Unit{ .basic = @enumFromInt(i) };
         if (u.metric() != unit.metric()) continue;
 
         if (target_unit == null) target_unit = u;

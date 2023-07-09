@@ -43,7 +43,7 @@
       flake-utils.lib.eachSystem systems (system:
         let
           pkgs = import nixpkgs { inherit overlays system; };
-          zig = pkgs.zigpkgs.master-2023-04-22;
+          zig = pkgs.zigpkgs.master-2023-07-08;
         in
           rec {
             devShells = {
