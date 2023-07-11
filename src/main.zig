@@ -355,7 +355,7 @@ fn run() !void {
             .time = .t,
             .help = .h,
         };
-    }, "from [other] to");
+    }, "from [other] to", "0.1");
 
     if (opt.args.help) {
         const stdout = std.io.getStdOut();
